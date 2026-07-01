@@ -111,6 +111,38 @@ function pickWords(allWords, mode) {
   return { words: shuffle(pool).slice(0, n), label };
 }
 
+// ---------- words.json fetch & export ----------
+
+async function tryLoadFromJson() {
+  try {
+    const res = await fetch('words.json');
+    if (!res.ok) return;
+    const jsonData = await res.json();
+    if (!jsonData.words || !jsonData.importedAt) return;
+    const stored = loadWordData();
+    if (!stored || jsonData.importedAt > stored.importedAt) {
+      saveWordData(jsonData);
+    }
+  } catch { /* ローカルファイル起動時やネットワークエラーは無視 */ }
+}
+
+function exportWords() {
+  const data = loadWordData();
+  if (!data) return;
+  const exportData = {
+    importedAt: data.importedAt,
+    fileName: data.fileName,
+    words: data.words.slice(-3000),
+  };
+  const blob = new Blob([JSON.stringify(exportData)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'words.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ---------- Home rendering ----------
 
 function renderHome() {
@@ -129,6 +161,8 @@ function renderHome() {
     $('lastImportText').textContent = '';
     modeBtns.forEach(b => b.disabled = true);
   }
+
+  $('exportBtn').disabled = !data;
 
   const resumeBtn = $('resumeBtn');
   if (session && session.words && session.currentIndex < session.words.length) {
@@ -311,6 +345,8 @@ function bindEvents() {
   $('correctBtn').addEventListener('click', () => judge(true));
   $('wrongBtn').addEventListener('click', () => judge(false));
 
+  $('exportBtn').addEventListener('click', exportWords);
+
   $('nextRoundBtn').addEventListener('click', nextRound);
   $('homeBtn').addEventListener('click', () => {
     const s = loadSession();
@@ -337,4 +373,4 @@ function bindEvents() {
 // ---------- init ----------
 
 bindEvents();
-renderHome();
+tryLoadFromJson().then(() => renderHome());
