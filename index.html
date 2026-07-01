@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>英単語クイズ</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ホーム画面 -->
+  <section id="home" class="screen">
+    <h1>英単語クイズ</h1>
+
+    <div id="dataStatus" class="data-status">
+      <p id="wordCountText">単語データが読み込まれていません。</p>
+      <p id="lastImportText" class="muted"></p>
+    </div>
+
+    <div class="mode-buttons" id="modeButtons">
+      <button class="mode-btn latest50-btn" data-mode="latest50">単純Latest50（最新50単語を全部）</button>
+      <button class="mode-btn" data-mode="all">完全にランダムに15個</button>
+      <button class="mode-btn" data-mode="bottom300">下から300単語からランダムに15個</button>
+      <button class="mode-btn" data-mode="bottom100">下から100単語からランダムに15個</button>
+    </div>
+
+    <div class="footer-buttons">
+      <label class="file-btn">
+        <input type="file" id="fileInput" accept=".xlsm,.xlsx,.xls" hidden>
+        データ再取り込み
+      </label>
+      <button id="resumeBtn" class="secondary" hidden>前回の続きから</button>
+    </div>
+
+    <p id="errorMsg" class="error"></p>
+  </section>
+
+  <!-- クイズ画面 -->
+  <section id="quiz" class="screen" hidden>
+    <header class="quiz-header">
+      <button id="backBtn" class="link-btn">← 保存して中断</button>
+      <div class="progress">
+        <span id="roundLabel"></span>
+        <span id="progressLabel"></span>
+      </div>
+      <span class="save-badge">💾 自動保存中</span>
+    </header>
+
+    <div class="card">
+      <div id="rowNum" class="row-num"></div>
+      <div id="englishWord" class="english"></div>
+      <div id="japaneseWord" class="japanese" hidden></div>
+    </div>
+
+    <div class="actions">
+      <button id="revealBtn" class="primary big">答えを見る</button>
+      <div id="judgeButtons" class="judge" hidden>
+        <button id="correctBtn" class="judge-btn correct">○ 正解</button>
+        <button id="wrongBtn" class="judge-btn wrong">× 不正解</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ラウンド結果画面 -->
+  <section id="result" class="screen" hidden>
+    <h2 id="resultTitle"></h2>
+    <p id="resultDetail"></p>
+    <ul id="wrongList" class="wrong-list"></ul>
+    <div class="footer-buttons">
+      <button id="nextRoundBtn" class="primary">次の周へ</button>
+      <button id="homeBtn" class="secondary">ホームへ戻る</button>
+    </div>
+  </section>
+
+</div>
+
+<script src="lib/xlsx.full.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
