@@ -27,6 +27,22 @@
       <button class="mode-btn" data-mode="bottom100">下から100単語からランダムに15個</button>
     </div>
 
+    <div class="custom-box">
+      <div class="custom-row">
+        <div class="custom-field">
+          <span class="custom-label">問題数</span>
+          <input type="number" id="customX" class="custom-input" value="15" min="1" max="999">
+          <span class="custom-unit">問</span>
+        </div>
+        <div class="custom-field">
+          <span class="custom-label">最新</span>
+          <input type="number" id="customY" class="custom-input" value="5000" min="1">
+          <span class="custom-unit">件から</span>
+        </div>
+      </div>
+      <button class="mode-btn custom-btn" id="customStartBtn">この設定で開始</button>
+    </div>
+
     <div class="footer-buttons">
       <label class="file-btn">
         <input type="file" id="fileInput" accept=".xlsm,.xlsx,.xls" hidden>

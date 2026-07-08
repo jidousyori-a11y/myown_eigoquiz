@@ -76,6 +76,56 @@ h2 {
 .latest50-btn { background: #7c3aed; }
 .latest50-btn:active { background: #6d28d9; }
 
+.custom-box {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.custom-row {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.custom-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.custom-label {
+  font-size: 14px;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.custom-input {
+  width: 80px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 16px;
+  text-align: center;
+  color: #1f2937;
+}
+
+.custom-unit {
+  font-size: 14px;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.custom-btn { background: #0369a1; }
+.custom-btn:active { background: #075985; }
+
 .footer-buttons {
   display: flex;
   flex-direction: column;

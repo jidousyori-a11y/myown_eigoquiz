@@ -2,6 +2,7 @@
 
 const LS_DATA = 'eiwq.wordData.v1';
 const LS_SESSION = 'eiwq.session.v1';
+const LS_CUSTOM = 'eiwq.custom.v1';
 const SHEET_NAME = 'Wrk';
 const QUIZ_SIZE = 15;
 
@@ -37,6 +38,12 @@ function loadSession() {
 }
 function saveSession(s) { localStorage.setItem(LS_SESSION, JSON.stringify(s)); }
 function clearSession() { localStorage.removeItem(LS_SESSION); }
+
+function loadCustomSettings() {
+  try { return JSON.parse(localStorage.getItem(LS_CUSTOM)) || { x: 15, y: 5000 }; }
+  catch { return { x: 15, y: 5000 }; }
+}
+function saveCustomSettings(x, y) { localStorage.setItem(LS_CUSTOM, JSON.stringify({ x, y })); }
 
 // ---------- Excel import ----------
 
@@ -164,6 +171,11 @@ function renderHome() {
 
   $('exportBtn').disabled = !data;
 
+  const custom = loadCustomSettings();
+  $('customX').value = custom.x;
+  $('customY').value = custom.y;
+  $('customStartBtn').disabled = !data;
+
   const resumeBtn = $('resumeBtn');
   if (session && session.words && session.currentIndex < session.words.length) {
     resumeBtn.hidden = false;
@@ -177,6 +189,28 @@ function renderHome() {
 }
 
 // ---------- Quiz ----------
+
+function startCustomSession() {
+  const data = loadWordData();
+  if (!data) return;
+  const x = Math.max(1, parseInt($('customX').value) || 15);
+  const y = Math.max(1, parseInt($('customY').value) || 5000);
+  saveCustomSettings(x, y);
+  const effectiveY = Math.min(y, data.words.length);
+  const pool = data.words.slice(-effectiveY);
+  const n = Math.min(x, pool.length);
+  const session = {
+    mode: 'custom',
+    modeLabel: `最新${effectiveY}件から${n}問`,
+    round: 1,
+    currentIndex: 0,
+    words: shuffle(pool).slice(0, n),
+    wrongIndices: [],
+    revealed: false,
+  };
+  saveSession(session);
+  renderQuiz();
+}
 
 function startNewSession(mode) {
   const data = loadWordData();
@@ -346,6 +380,16 @@ function bindEvents() {
   $('wrongBtn').addEventListener('click', () => judge(false));
 
   $('exportBtn').addEventListener('click', exportWords);
+
+  $('customStartBtn').addEventListener('click', () => {
+    if ($('customStartBtn').disabled) return;
+    const existing = loadSession();
+    if (existing && existing.currentIndex < existing.words.length) {
+      if (!confirm('進行中のクイズがあります。新しく始めると進捗は失われます。続けますか？')) return;
+    }
+    clearSession();
+    startCustomSession();
+  });
 
   $('nextRoundBtn').addEventListener('click', nextRound);
   $('homeBtn').addEventListener('click', () => {
