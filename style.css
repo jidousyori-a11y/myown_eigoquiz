@@ -280,9 +280,26 @@ h2 {
   font-size: 14px;
   line-height: 1.7;
   color: #1f2937;
-  white-space: pre-wrap;
   text-align: left;
 }
+.ai-result p { margin: 0 0 10px; }
+.ai-result p:last-child { margin-bottom: 0; }
+.ai-result h3, .ai-result h4, .ai-result h5, .ai-result h6 {
+  margin: 14px 0 6px;
+  font-size: 15px;
+  color: #5b21b6;
+}
+.ai-result h3:first-child, .ai-result h4:first-child { margin-top: 0; }
+.ai-result ul, .ai-result ol { margin: 0 0 10px; padding-left: 22px; }
+.ai-result li { margin-bottom: 4px; }
+.ai-result li:last-child { margin-bottom: 0; }
+.ai-result code {
+  background: #ede9fe;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 13px;
+}
+.ai-result strong { color: #4c1d95; }
 
 .actions { display: flex; flex-direction: column; gap: 14px; }
 

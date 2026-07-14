@@ -267,6 +267,77 @@ function renderQuiz() {
   showScreen('quiz');
 }
 
+// ---------- 簡易Markdownレンダリング ----------
+
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function renderInline(text) {
+  let s = escapeHtml(text);
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, '$1<em>$2</em>');
+  s = s.replace(/(^|[^_])_([^_]+)_(?!_)/g, '$1<em>$2</em>');
+  return s;
+}
+
+function markdownToHtml(md) {
+  const lines = md.replace(/\r\n/g, '\n').split('\n');
+  const htmlParts = [];
+  let listType = null; // 'ul' | 'ol'
+  let paragraphLines = [];
+
+  const flushParagraph = () => {
+    if (paragraphLines.length) {
+      htmlParts.push(`<p>${paragraphLines.map(renderInline).join('<br>')}</p>`);
+      paragraphLines = [];
+    }
+  };
+  const closeList = () => {
+    if (listType) {
+      htmlParts.push(`</${listType}>`);
+      listType = null;
+    }
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (line === '') { flushParagraph(); closeList(); continue; }
+
+    const headerMatch = line.match(/^(#{1,6})\s+(.*)$/);
+    if (headerMatch) {
+      flushParagraph();
+      closeList();
+      const level = Math.min(headerMatch[1].length + 2, 6);
+      htmlParts.push(`<h${level}>${renderInline(headerMatch[2])}</h${level}>`);
+      continue;
+    }
+
+    const ulMatch = line.match(/^[-*]\s+(.*)$/);
+    if (ulMatch) {
+      flushParagraph();
+      if (listType !== 'ul') { closeList(); htmlParts.push('<ul>'); listType = 'ul'; }
+      htmlParts.push(`<li>${renderInline(ulMatch[1])}</li>`);
+      continue;
+    }
+
+    const olMatch = line.match(/^\d+[.)]\s+(.*)$/);
+    if (olMatch) {
+      flushParagraph();
+      if (listType !== 'ol') { closeList(); htmlParts.push('<ol>'); listType = 'ol'; }
+      htmlParts.push(`<li>${renderInline(olMatch[1])}</li>`);
+      continue;
+    }
+
+    closeList();
+    paragraphLines.push(line);
+  }
+  flushParagraph();
+  closeList();
+  return htmlParts.join('');
+}
+
 // ---------- AI例文リクエスト ----------
 
 async function requestAiExamples() {
@@ -288,13 +359,14 @@ async function requestAiExamples() {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || `エラー (HTTP ${res.status})`);
-    resultEl.textContent = data.text;
+    resultEl.innerHTML = markdownToHtml(data.text);
     resultEl.hidden = false;
     btn.hidden = true;
   } catch (err) {
-    resultEl.textContent =
+    const msg =
       'AI例文の取得に失敗しました: ' + err.message +
       '\n（この機能は node server.js でローカルサーバーを起動している場合のみ利用できます）';
+    resultEl.innerHTML = escapeHtml(msg).replace(/\n/g, '<br>');
     resultEl.hidden = false;
     btn.disabled = false;
     btn.textContent = '✨ 例文をAIにリクエスト';
