@@ -247,13 +247,58 @@ function renderQuiz() {
     $('japaneseWord').hidden = false;
     $('revealBtn').hidden = true;
     $('judgeButtons').hidden = false;
+    $('aiExampleBox').hidden = false;
   } else {
     $('japaneseWord').hidden = true;
     $('revealBtn').hidden = false;
     $('judgeButtons').hidden = true;
+    $('aiExampleBox').hidden = true;
   }
 
+  // AI例文リクエストの状態は単語ごとにリセット
+  const aiBtn = $('aiExampleBtn');
+  const aiResult = $('aiExampleResult');
+  aiBtn.hidden = false;
+  aiBtn.disabled = false;
+  aiBtn.textContent = '✨ 例文をAIにリクエスト';
+  aiResult.hidden = true;
+  aiResult.textContent = '';
+
   showScreen('quiz');
+}
+
+// ---------- AI例文リクエスト ----------
+
+async function requestAiExamples() {
+  const session = loadSession();
+  if (!session) return;
+  const w = session.words[session.currentIndex];
+  const btn = $('aiExampleBtn');
+  const resultEl = $('aiExampleResult');
+
+  btn.disabled = true;
+  btn.textContent = '生成中…';
+  resultEl.hidden = true;
+
+  try {
+    const res = await fetch('/api/gemini-examples', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ en: w.en, ja: w.ja }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `エラー (HTTP ${res.status})`);
+    resultEl.textContent = data.text;
+    resultEl.hidden = false;
+    btn.hidden = true;
+  } catch (err) {
+    resultEl.textContent =
+      'AI例文の取得に失敗しました: ' + err.message +
+      '\n（この機能は node server.js でローカルサーバーを起動している場合のみ利用できます）';
+    resultEl.hidden = false;
+    btn.disabled = false;
+    btn.textContent = '✨ 例文をAIにリクエスト';
+  }
 }
 
 function reveal() {
@@ -376,6 +421,7 @@ function bindEvents() {
   });
 
   $('revealBtn').addEventListener('click', reveal);
+  $('aiExampleBtn').addEventListener('click', requestAiExamples);
   $('correctBtn').addEventListener('click', () => judge(true));
   $('wrongBtn').addEventListener('click', () => judge(false));
 
