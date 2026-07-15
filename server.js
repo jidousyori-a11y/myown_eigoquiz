@@ -9,7 +9,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const PORT = process.env.PORT || 51735;
+const PORT = process.env.PORT || 10503;
 const ROOT = __dirname;
 const GEMINI_MODEL = 'gemini-2.5-flash';
 
