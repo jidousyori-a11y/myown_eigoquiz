@@ -144,22 +144,67 @@ async function tryLoadFromJson() {
   } catch { /* ローカルファイル起動時やネットワークエラーは無視 */ }
 }
 
-function exportWords() {
+const WORDS_JSON_FOLDER = 'R:\\PUBTEMP\\FY26\\AI_Experiment\\英単語';
+
+// 保存できた場合は { saved: true, pickerUsed } を返す。
+// pickerUsed=true ならブラウザのネイティブ保存先選択ダイアログで直接そのフォルダに書き込めた。
+// pickerUsed=false ならダウンロードフォルダに保存されたので、手動で移動する必要がある。
+async function exportWords() {
   const data = loadWordData();
-  if (!data) return;
+  if (!data) return { saved: false };
   const exportData = {
     importedAt: data.importedAt,
     fileName: data.fileName,
     words: data.words.slice(-3000),
     latestAddedCount: data.latestAddedCount,
   };
-  const blob = new Blob([JSON.stringify(exportData)], { type: 'application/json' });
+  const json = JSON.stringify(exportData);
+
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: 'words.json',
+        types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(json);
+      await writable.close();
+      return { saved: true, pickerUsed: true };
+    } catch (err) {
+      if (err && err.name === 'AbortError') return { saved: false };
+      // それ以外のエラー時はダウンロード方式にフォールバック
+    }
+  }
+
+  const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = 'words.json';
   a.click();
   URL.revokeObjectURL(url);
+  return { saved: true, pickerUsed: false };
+}
+
+function showGitCommitReminder(pickerUsed) {
+  const commands =
+    `cd "${WORDS_JSON_FOLDER}"\n` +
+    `git add words.json\n` +
+    `git commit -m "単語データ更新"`;
+
+  if (pickerUsed) {
+    alert(
+      `words.json を保存しました。\n\n` +
+      `続けて、以下をPowerShellで実行してgitにコミットしてください:\n\n${commands}`
+    );
+  } else {
+    alert(
+      `words.json をダウンロードフォルダに保存しました。\n\n` +
+      `1. ダウンロードされた words.json を次のフォルダに上書きしてください:\n` +
+      `   ${WORDS_JSON_FOLDER}\n\n` +
+      `2. 上書き後、以下をPowerShellで実行してgitにコミットしてください:\n\n${commands}`
+    );
+  }
 }
 
 // ---------- Home rendering ----------
@@ -474,9 +519,20 @@ function bindEvents() {
     if (!f) return;
     showError('読み込み中…');
     try {
-      await importExcelFile(f);
+      const data = await importExcelFile(f);
       e.target.value = '';
       renderHome();
+
+      const doExport = confirm(
+        `単語データの取り込みが完了しました。\n` +
+        `（新規追加: ${data.latestAddedCount}個 / 登録単語数合計: ${data.words.length}個）\n\n` +
+        `words.json をエクスポートしますか？\n\n` +
+        `保存先は次のフォルダを指定してください:\n${WORDS_JSON_FOLDER}`
+      );
+      if (doExport) {
+        const result = await exportWords();
+        if (result.saved) showGitCommitReminder(result.pickerUsed);
+      }
     } catch (err) {
       showError('読み込みに失敗しました: ' + err.message);
     }
@@ -511,7 +567,10 @@ function bindEvents() {
   $('correctBtn').addEventListener('click', () => judge(true));
   $('wrongBtn').addEventListener('click', () => judge(false));
 
-  $('exportBtn').addEventListener('click', exportWords);
+  $('exportBtn').addEventListener('click', async () => {
+    const result = await exportWords();
+    if (result.saved) showGitCommitReminder(result.pickerUsed);
+  });
 
   $('customStartBtn').addEventListener('click', () => {
     if ($('customStartBtn').disabled) return;
