@@ -69,10 +69,19 @@ async function importExcelFile(file) {
   if (words.length === 0) {
     throw new Error('E列・F列に有効なデータが見つかりませんでした。');
   }
+
+  // 単語は消されない前提のため、前回との差分＝今回新たに追加された単語数
+  const previous = loadWordData();
+  const previousCount = (previous && Array.isArray(previous.words)) ? previous.words.length : 0;
+  const latestAddedCount = previousCount > 0
+    ? Math.max(words.length - previousCount, 0)
+    : words.length;
+
   const data = {
     importedAt: new Date().toISOString(),
     fileName: file.name,
     words,
+    latestAddedCount,
   };
   saveWordData(data);
   return data;
@@ -89,16 +98,18 @@ function shuffle(arr) {
   return a;
 }
 
-function pickWords(allWords, mode) {
+function pickWords(allWords, mode, latestAddedCount) {
   let pool;
   let label;
   let quizSize = QUIZ_SIZE;
   switch (mode) {
-    case 'latest50':
-      pool = allWords.slice(-50);
-      label = 'Latest50';
-      quizSize = 50;
+    case 'latest50': {
+      const n = Math.max(1, latestAddedCount || 50);
+      pool = allWords.slice(-n);
+      label = `Latest単語(${n}個)`;
+      quizSize = n;
       break;
+    }
     case 'all':
       pool = allWords;
       label = '完全ランダム';
@@ -140,6 +151,7 @@ function exportWords() {
     importedAt: data.importedAt,
     fileName: data.fileName,
     words: data.words.slice(-3000),
+    latestAddedCount: data.latestAddedCount,
   };
   const blob = new Blob([JSON.stringify(exportData)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -162,6 +174,8 @@ function renderHome() {
     const dt = new Date(data.importedAt);
     const fmt = dt.toLocaleString('ja-JP');
     $('lastImportText').textContent = `最終取り込み: ${fmt}（${data.fileName}）`;
+    const latestN = Math.max(1, data.latestAddedCount || 50);
+    $('latest50Btn').textContent = `Latest単語(${latestN}個)`;
     modeBtns.forEach(b => b.disabled = false);
   } else {
     $('wordCountText').textContent = '単語データが読み込まれていません。下の「データ再取り込み」から Excel を読み込んでください。';
@@ -215,7 +229,7 @@ function startCustomSession() {
 function startNewSession(mode) {
   const data = loadWordData();
   if (!data) return;
-  const { words, label } = pickWords(data.words, mode);
+  const { words, label } = pickWords(data.words, mode, data.latestAddedCount);
   const session = {
     mode,
     modeLabel: label,
