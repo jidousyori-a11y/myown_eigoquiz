@@ -190,19 +190,20 @@ function showGitCommitReminder(pickerUsed) {
   const commands =
     `cd "${WORDS_JSON_FOLDER}"\n` +
     `git add words.json\n` +
-    `git commit -m "単語データ更新"`;
+    `git commit -m "単語データ更新"\n` +
+    `git push`;
 
   if (pickerUsed) {
     alert(
       `words.json を保存しました。\n\n` +
-      `続けて、以下をPowerShellで実行してgitにコミットしてください:\n\n${commands}`
+      `続けて、以下をPowerShellで実行してgitにコミット・pushしてください:\n\n${commands}`
     );
   } else {
     alert(
       `words.json をダウンロードフォルダに保存しました。\n\n` +
       `1. ダウンロードされた words.json を次のフォルダに上書きしてください:\n` +
       `   ${WORDS_JSON_FOLDER}\n\n` +
-      `2. 上書き後、以下をPowerShellで実行してgitにコミットしてください:\n\n${commands}`
+      `2. 上書き後、以下をPowerShellで実行してgitにコミット・pushしてください:\n\n${commands}`
     );
   }
 }
