@@ -1,5 +1,10 @@
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+/* [hidden]属性は、display を明示指定するクラス(.secondary, .judge等)より
+   カスケード上優先されるべきだが、作者スタイルがUAスタイルに勝つ仕様のため
+   放っておくと形骸化する。ここで明示的に勝たせる。 */
+[hidden] { display: none !important; }
+
 html {
   -webkit-text-size-adjust: 100%;
 }
@@ -38,6 +43,11 @@ h1 {
 h2 {
   font-size: 20px;
   margin: 8px 0 16px;
+}
+
+.feature-nav {
+  text-align: center;
+  margin-bottom: 16px;
 }
 
 .data-status {
@@ -179,6 +189,132 @@ h2 {
   margin-top: 16px;
   white-space: pre-wrap;
   font-size: 14px;
+}
+
+.ai-key-box { margin-top: 20px; text-align: center; }
+
+.ai-key-panel {
+  margin-top: 10px;
+  padding: 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+  text-align: left;
+}
+.ai-key-panel .muted { display: block; margin: 0 0 10px; }
+
+.ai-key-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 15px;
+  color: #1e293b;
+  margin-bottom: 10px;
+}
+
+.ai-key-actions {
+  display: flex;
+  gap: 8px;
+}
+.ai-key-actions .secondary { width: auto; flex: 1; padding: 10px; font-size: 14px; }
+
+/* ===== 和英表現練習：登録・編集 ===== */
+
+.waei-form-box {
+  background: #fff;
+  border: 1px solid #dbe4f0;
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.waei-label {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.waei-textarea {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 15px;
+  font-family: inherit;
+  color: #1e293b;
+  resize: vertical;
+}
+
+.waei-item-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.waei-item-list li {
+  background: #fff;
+  border: 1px solid #dbe4f0;
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.waei-item-ja {
+  font-weight: 600;
+  font-size: 15px;
+  margin-bottom: 6px;
+  white-space: pre-wrap;
+}
+
+.waei-item-en {
+  color: #0e7490;
+  font-size: 14px;
+  margin-bottom: 10px;
+  white-space: pre-wrap;
+}
+
+.waei-item-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.waei-item-actions button {
+  flex: 1;
+  padding: 8px;
+  font-size: 13px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  cursor: pointer;
+}
+.waei-item-actions button:active { background: #eef2f9; }
+
+/* ===== 和英表現練習：テスト ===== */
+
+.japanese-question {
+  font-size: 26px;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.english-answer {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px dashed #dbe4f0;
+  font-size: 19px;
+  color: #0e7490;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  text-align: left;
 }
 
 /* ===== Quiz ===== */
@@ -405,6 +541,9 @@ h2 {
   .secondary:hover { background: #eef2f9; }
 
   .english { font-size: 32px; }
+  .japanese-question { font-size: 28px; }
+
+  .waei-item-actions button:hover { background: #eef2f9; }
 
   .wrong-list li {
     flex-direction: row;
