@@ -12,6 +12,8 @@ const path = require('path');
 const PORT = process.env.PORT || 10503;
 const ROOT = __dirname;
 const GEMINI_MODEL = 'gemini-2.5-flash';
+const WORDS_FILE = path.join(ROOT, 'words.json');
+const EXPRESSIONS_FILE = path.join(ROOT, 'expressions.json');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -127,9 +129,64 @@ async function handleGeminiExamples(req, res) {
   }
 }
 
+// ローカルサーバーが起動しているかどうかをブラウザ側から判定するための軽量エンドポイント。
+// GitHub Pagesなど静的配信のみの環境ではこのパスは存在しない(404)ため、
+// 応答の有無で「データ編集が可能かどうか」をクライアントが判断する。
+function handlePing(req, res) {
+  res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify({ ok: true }));
+}
+
+// 単語データ(words.json)・和英表現データ(expressions.json)をサーバー側で直接上書きする。
+// これによりブラウザでの編集がそのままリポジトリ内のファイルに反映され、
+// 「エクスポートして手動でファイルを上書きし、git commit/pushする」手順が不要になる。
+function makeDataSaveHandler(filePath, requiredArrayKey) {
+  return async function handleDataSave(req, res) {
+    let payload;
+    try {
+      payload = await readJsonBody(req);
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'リクエストの形式が不正です。' }));
+      return;
+    }
+
+    if (!payload || !Array.isArray(payload[requiredArrayKey])) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: `${requiredArrayKey}配列が含まれていません。` }));
+      return;
+    }
+
+    try {
+      fs.writeFileSync(filePath, JSON.stringify(payload));
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: `${path.basename(filePath)} への書き込みに失敗しました: ` + e.message }));
+    }
+  };
+}
+
+const handleWordsSave = makeDataSaveHandler(WORDS_FILE, 'words');
+const handleExpressionsSave = makeDataSaveHandler(EXPRESSIONS_FILE, 'items');
+
 const server = http.createServer((req, res) => {
-  if (req.method === 'POST' && req.url.split('?')[0] === '/api/gemini-examples') {
+  const urlPath = req.url.split('?')[0];
+  if (req.method === 'GET' && urlPath === '/api/data/ping') {
+    handlePing(req, res);
+    return;
+  }
+  if (req.method === 'POST' && urlPath === '/api/gemini-examples') {
     handleGeminiExamples(req, res);
+    return;
+  }
+  if (req.method === 'POST' && urlPath === '/api/data/words/save') {
+    handleWordsSave(req, res);
+    return;
+  }
+  if (req.method === 'POST' && urlPath === '/api/data/expressions/save') {
+    handleExpressionsSave(req, res);
     return;
   }
   if (req.method === 'GET') {

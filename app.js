@@ -1,6 +1,5 @@
 'use strict';
 
-const LS_DATA = 'eiwq.wordData.v1';
 const LS_SESSION = 'eiwq.session.v1';
 const LS_CUSTOM = 'eiwq.custom.v1';
 const LS_GEMINI_KEY = 'eiwq.geminiKey.v1';
@@ -9,7 +8,6 @@ const QUIZ_SIZE = 15;
 const GEMINI_MODEL = 'gemini-2.5-flash';
 
 // 和英表現練習：単語クイズとは完全に独立したデータ領域
-const LS_WAEI_DATA = 'waei.data.v1';
 const LS_WAEI_SESSION = 'waei.session.v1';
 const WAEI_JSON_FILE = 'expressions.json';
 
@@ -31,15 +29,59 @@ function showScreen(name) {
   }
 }
 
-// ---------- localStorage helpers ----------
+// ---------- 単語データ(localStorageではなくwords.jsonファイルが実体) ----------
+// 起動時に一度fetchしてメモリ上(wordDataCache)に保持し、編集(Excel再取り込み)は
+// ローカルサーバーの /api/data/words/save 経由でファイルへ直接書き込む。
+// GitHub Pagesなど、サーバーがない環境では書き込みできず読み取り専用になる。
+let wordDataCache = null;
+let serverWritable = false;
 
 function loadWordData() {
-  try {
-    const s = localStorage.getItem(LS_DATA);
-    return s ? JSON.parse(s) : null;
-  } catch { return null; }
+  return wordDataCache;
 }
-function saveWordData(d) { localStorage.setItem(LS_DATA, JSON.stringify(d)); }
+
+async function saveWordData(d) {
+  if (!serverWritable) {
+    throw new Error('この端末ではデータを保存できません(ローカルサーバー(node server.js)起動時のみ保存できます)。');
+  }
+  const res = await fetch('/api/data/words/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(d),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `保存に失敗しました (HTTP ${res.status})`);
+  }
+  wordDataCache = d;
+}
+
+async function checkServerWritable() {
+  try {
+    const res = await fetch('/api/data/ping', { cache: 'no-store' });
+    serverWritable = res.ok;
+  } catch {
+    serverWritable = false;
+  }
+}
+
+async function initWordData() {
+  try {
+    const res = await fetch('words.json', { cache: 'no-store' });
+    if (!res.ok) return;
+    const jsonData = await res.json();
+    if (!jsonData.words) return;
+    wordDataCache = jsonData;
+  } catch { /* ローカルファイル起動時やネットワークエラーは無視 */ }
+}
+
+// サーバーが書き込み不可(GitHub Pagesなど静的配信のみ)の場合、
+// データ編集系のUIを非表示にしてクイズ実施のみの読み取り専用にする。
+function applyWritability() {
+  const reimportLabel = document.getElementById('reimportLabel');
+  if (reimportLabel) reimportLabel.hidden = !serverWritable;
+  $('waeiManageBtn').hidden = !serverWritable;
+}
 
 function loadSession() {
   try {
@@ -100,7 +142,7 @@ async function importExcelFile(file) {
     words,
     latestAddedCount,
   };
-  saveWordData(data);
+  await saveWordData(data);
   return data;
 }
 
@@ -146,22 +188,9 @@ function pickWords(allWords, mode, latestAddedCount) {
   return { words: shuffle(pool).slice(0, n), label };
 }
 
-// ---------- words.json fetch & export ----------
-
-async function tryLoadFromJson() {
-  try {
-    const res = await fetch('words.json');
-    if (!res.ok) return;
-    const jsonData = await res.json();
-    if (!jsonData.words || !jsonData.importedAt) return;
-    const stored = loadWordData();
-    if (!stored || jsonData.importedAt > stored.importedAt) {
-      saveWordData(jsonData);
-    }
-  } catch { /* ローカルファイル起動時やネットワークエラーは無視 */ }
-}
-
-const WORDS_JSON_FOLDER = 'R:\\PUBTEMP\\FY26\\AI_Experiment\\英単語';
+// ---------- words.json 手動バックアップ書き出し ----------
+// 通常の保存はサーバー(/api/data/words/save)が直接 words.json に書き込むため、
+// この関数は「手元にファイルとしても控えを残したい」場合の任意のバックアップ用。
 
 // 保存できた場合は { saved: true, pickerUsed } を返す。
 // pickerUsed=true ならブラウザのネイティブ保存先選択ダイアログで直接そのフォルダに書き込めた。
@@ -203,28 +232,6 @@ async function exportWords() {
   return { saved: true, pickerUsed: false };
 }
 
-function showGitCommitReminder(pickerUsed) {
-  const commands =
-    `cd "${WORDS_JSON_FOLDER}"\n` +
-    `git add words.json\n` +
-    `git commit -m "単語データ更新"\n` +
-    `git push`;
-
-  if (pickerUsed) {
-    alert(
-      `words.json を保存しました。\n\n` +
-      `続けて、以下をPowerShellで実行してgitにコミット・pushしてください:\n\n${commands}`
-    );
-  } else {
-    alert(
-      `words.json をダウンロードフォルダに保存しました。\n\n` +
-      `1. ダウンロードされた words.json を次のフォルダに上書きしてください:\n` +
-      `   ${WORDS_JSON_FOLDER}\n\n` +
-      `2. 上書き後、以下をPowerShellで実行してgitにコミット・pushしてください:\n\n${commands}`
-    );
-  }
-}
-
 // ================================================================
 // 和英表現練習（単語クイズとはデータ・localStorageキーとも完全に独立）
 // ================================================================
@@ -233,33 +240,66 @@ function genWaeiId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
+// 和英表現データも単語データと同様、localStorageではなくexpressions.jsonファイルが実体。
+let waeiDataCache = { items: [], updatedAt: null };
+
 function loadWaeiData() {
-  try {
-    const s = localStorage.getItem(LS_WAEI_DATA);
-    const d = s ? JSON.parse(s) : null;
-    return (d && Array.isArray(d.items)) ? d : { items: [], updatedAt: null };
-  } catch { return { items: [], updatedAt: null }; }
-}
-function saveWaeiData(d) {
-  d.updatedAt = new Date().toISOString();
-  localStorage.setItem(LS_WAEI_DATA, JSON.stringify(d));
+  return waeiDataCache;
 }
 
-function addWaeiItem(ja, en) {
-  const data = loadWaeiData();
-  data.items.push({ id: genWaeiId(), ja, en, createdAt: new Date().toISOString() });
-  saveWaeiData(data);
+async function saveWaeiData(d) {
+  d.updatedAt = new Date().toISOString();
+  if (!serverWritable) {
+    throw new Error('この端末ではデータを保存できません(ローカルサーバー(node server.js)起動時のみ保存できます)。');
+  }
+  const res = await fetch('/api/data/expressions/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(d),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `保存に失敗しました (HTTP ${res.status})`);
+  }
+  waeiDataCache = d;
 }
-function updateWaeiItem(id, ja, en) {
+
+async function addWaeiItem(ja, en) {
+  const data = loadWaeiData();
+  const previousItems = data.items.slice();
+  data.items.push({ id: genWaeiId(), ja, en, createdAt: new Date().toISOString() });
+  try {
+    await saveWaeiData(data);
+  } catch (err) {
+    data.items = previousItems;
+    throw err;
+  }
+}
+async function updateWaeiItem(id, ja, en) {
   const data = loadWaeiData();
   const item = data.items.find((i) => i.id === id);
-  if (item) { item.ja = ja; item.en = en; }
-  saveWaeiData(data);
+  if (!item) return;
+  const previous = { ja: item.ja, en: item.en };
+  item.ja = ja; item.en = en;
+  try {
+    await saveWaeiData(data);
+  } catch (err) {
+    item.ja = previous.ja; item.en = previous.en;
+    throw err;
+  }
 }
-function deleteWaeiItem(id) {
+async function deleteWaeiItem(id) {
   const data = loadWaeiData();
-  data.items = data.items.filter((i) => i.id !== id);
-  saveWaeiData(data);
+  const idx = data.items.findIndex((i) => i.id === id);
+  if (idx === -1) return;
+  const removed = data.items[idx];
+  data.items.splice(idx, 1);
+  try {
+    await saveWaeiData(data);
+  } catch (err) {
+    data.items.splice(idx, 0, removed);
+    throw err;
+  }
 }
 
 function loadWaeiSession() {
@@ -271,20 +311,14 @@ function loadWaeiSession() {
 function saveWaeiSession(s) { localStorage.setItem(LS_WAEI_SESSION, JSON.stringify(s)); }
 function clearWaeiSession() { localStorage.removeItem(LS_WAEI_SESSION); }
 
-// ページ同梱の expressions.json（gitで永続管理）をローカル保存より新しければ取り込む
-async function tryLoadWaeiFromJson() {
+// ページ同梱の expressions.json を起動時に一度fetchしてメモリ上に保持する。
+async function initWaeiData() {
   try {
-    const res = await fetch(WAEI_JSON_FILE);
+    const res = await fetch(WAEI_JSON_FILE, { cache: 'no-store' });
     if (!res.ok) return;
     const jsonData = await res.json();
     if (!Array.isArray(jsonData.items)) return;
-    const stored = loadWaeiData();
-    if (!stored.updatedAt || (jsonData.updatedAt && jsonData.updatedAt > stored.updatedAt)) {
-      localStorage.setItem(LS_WAEI_DATA, JSON.stringify({
-        items: jsonData.items,
-        updatedAt: jsonData.updatedAt || new Date().toISOString(),
-      }));
-    }
+    waeiDataCache = { items: jsonData.items, updatedAt: jsonData.updatedAt || null };
   } catch { /* ローカルファイル起動時やネットワークエラーは無視 */ }
 }
 
@@ -316,28 +350,6 @@ async function exportWaeiData() {
   a.click();
   URL.revokeObjectURL(url);
   return { saved: true, pickerUsed: false };
-}
-
-function showWaeiGitCommitReminder(pickerUsed) {
-  const commands =
-    `cd "${WORDS_JSON_FOLDER}"\n` +
-    `git add ${WAEI_JSON_FILE}\n` +
-    `git commit -m "和英表現データ更新"\n` +
-    `git push`;
-
-  if (pickerUsed) {
-    alert(
-      `${WAEI_JSON_FILE} を保存しました。\n\n` +
-      `続けて、以下をPowerShellで実行してgitにコミット・pushしてください:\n\n${commands}`
-    );
-  } else {
-    alert(
-      `${WAEI_JSON_FILE} をダウンロードフォルダに保存しました。\n\n` +
-      `1. ダウンロードされた ${WAEI_JSON_FILE} を次のフォルダに上書きしてください:\n` +
-      `   ${WORDS_JSON_FOLDER}\n\n` +
-      `2. 上書き後、以下をPowerShellで実行してgitにコミット・pushしてください:\n\n${commands}`
-    );
-  }
 }
 
 // ---------- 和英表現練習：ホーム ----------
@@ -384,6 +396,10 @@ function resetWaeiForm() {
 }
 
 function renderWaeiForm() {
+  if (!serverWritable) {
+    alert('登録・編集はローカルサーバー(node server.js)起動時のみ利用できます。');
+    return;
+  }
   resetWaeiForm();
   renderWaeiItemList();
   showScreen('waeiForm');
@@ -416,9 +432,14 @@ function renderWaeiItemList() {
     const delBtn = document.createElement('button');
     delBtn.type = 'button';
     delBtn.textContent = '削除';
-    delBtn.addEventListener('click', () => {
+    delBtn.addEventListener('click', async () => {
       if (!confirm('この問題を削除しますか？')) return;
-      deleteWaeiItem(it.id);
+      try {
+        await deleteWaeiItem(it.id);
+      } catch (err) {
+        alert('削除に失敗しました: ' + err.message);
+        return;
+      }
       if (waeiEditingId === it.id) resetWaeiForm();
       renderWaeiItemList();
     });
@@ -919,22 +940,20 @@ function bindEvents() {
   $('fileInput').addEventListener('change', async (e) => {
     const f = e.target.files[0];
     if (!f) return;
+    if (!serverWritable) {
+      showError('データ再取り込みはローカルサーバー(node server.js)起動時のみ利用できます。');
+      e.target.value = '';
+      return;
+    }
     showError('読み込み中…');
     try {
       const data = await importExcelFile(f);
       e.target.value = '';
       renderHome();
-
-      const doExport = confirm(
-        `単語データの取り込みが完了しました。\n` +
-        `（新規追加: ${data.latestAddedCount}個 / 登録単語数合計: ${data.words.length}個）\n\n` +
-        `words.json をエクスポートしますか？\n\n` +
-        `保存先は次のフォルダを指定してください:\n${WORDS_JSON_FOLDER}`
+      alert(
+        `単語データの取り込みが完了し、サーバーに保存しました。\n` +
+        `（新規追加: ${data.latestAddedCount}個 / 登録単語数合計: ${data.words.length}個）`
       );
-      if (doExport) {
-        const result = await exportWords();
-        if (result.saved) showGitCommitReminder(result.pickerUsed);
-      }
     } catch (err) {
       showError('読み込みに失敗しました: ' + err.message);
     }
@@ -971,7 +990,9 @@ function bindEvents() {
 
   $('exportBtn').addEventListener('click', async () => {
     const result = await exportWords();
-    if (result.saved) showGitCommitReminder(result.pickerUsed);
+    if (result.saved && !result.pickerUsed) {
+      alert('words.json をダウンロードフォルダに保存しました(手動バックアップ用)。');
+    }
   });
 
   $('customStartBtn').addEventListener('click', () => {
@@ -1055,17 +1076,22 @@ function bindEvents() {
   $('waeiCorrectBtn').addEventListener('click', () => waeiJudge(true));
   $('waeiWrongBtn').addEventListener('click', () => waeiJudge(false));
 
-  $('waeiSaveItemBtn').addEventListener('click', () => {
+  $('waeiSaveItemBtn').addEventListener('click', async () => {
     const ja = $('waeiInputJa').value.trim();
     const en = $('waeiInputEn').value.trim();
     if (!ja || !en) {
       $('waeiFormError').textContent = '日本語と英語の両方を入力してください。';
       return;
     }
-    if (waeiEditingId) {
-      updateWaeiItem(waeiEditingId, ja, en);
-    } else {
-      addWaeiItem(ja, en);
+    try {
+      if (waeiEditingId) {
+        await updateWaeiItem(waeiEditingId, ja, en);
+      } else {
+        await addWaeiItem(ja, en);
+      }
+    } catch (err) {
+      $('waeiFormError').textContent = '保存に失敗しました: ' + err.message;
+      return;
     }
     resetWaeiForm();
     renderWaeiItemList();
@@ -1075,7 +1101,9 @@ function bindEvents() {
 
   $('waeiExportBtn').addEventListener('click', async () => {
     const result = await exportWaeiData();
-    if (result.saved) showWaeiGitCommitReminder(result.pickerUsed);
+    if (result.saved && !result.pickerUsed) {
+      alert(`${WAEI_JSON_FILE} をダウンロードフォルダに保存しました(手動バックアップ用)。`);
+    }
   });
 
   $('waeiNextRoundBtn').addEventListener('click', waeiNextRound);
@@ -1112,4 +1140,9 @@ function bindEvents() {
 // ---------- init ----------
 
 bindEvents();
-Promise.all([tryLoadFromJson(), tryLoadWaeiFromJson()]).then(() => renderHome());
+checkServerWritable()
+  .then(() => Promise.all([initWordData(), initWaeiData()]))
+  .then(() => {
+    applyWritability();
+    renderHome();
+  });
